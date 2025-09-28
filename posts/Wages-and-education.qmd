@@ -1,0 +1,438 @@
+---
+title: "A1 Part 1, Dataset - Wages"
+format: html
+editor: visual
+author: Ashmita Biswas, Ihina Purohit, Manal Nazer, Shashwat Gupta
+---
+
+# **Wages and Education in Canada**
+
+This data set focuses on wages and education levels in Canada.
+
+In our exploratory data analysis (EDA), we have examined the data set through several steps: inspecting the data, making assumptions about the variables, validating those assumptions, summarizing the information, applying filters, visualizing the patterns, and finally, drawing meaningful insights.
+
+## Data Dictionary
+
+Qualitative Variables
+
+:   **language:** Factor indicating language. Language refers to English, French or Other. "Other" refers to languages that are not English and French.
+
+    **sex:** Factor indicating sex. Sex refers to either Male or Female.
+
+Quantitative Variables
+
+:   **age:** age in years.
+
+    **education:** total years of education.
+
+    **wages:** amount of wages earned on an hourly basis in dollars.
+
+## Our assumptions before performing EDA: 
+
+-   We expected individuals from "other" language groups to face disadvantages in education and wages compared to English or French speakers.
+
+-   We also assumed that cultural or community-specific factors might provide additional support for women in "french" and "english" language groups, leading to higher outcomes than women from the "other" language group.
+
+-   People above the age of 60/retired personnel were included in the data collection process.
+
+------------------------------------------------------------------------
+
+#### Setting up the libraries
+
+```{r}
+library(tidyverse)
+library(mosaic)
+library(skimr)
+library(visdat)
+library(naniar)
+library(janitor)
+library(ggformula)
+library(dplyr)
+library(tinytable)
+library(DT)
+library(crosstable)
+```
+
+#### Reading the data
+
+```{r}
+  Wages <-read_csv("data/wages_edu.csv") %>% 
+  janitor::clean_names(case = "snake")
+Wages
+
+```
+
+#### The missing data
+
+```{r}
+  visdat::vis_dat(Wages) + ggtitle(label= "Wages and Education in Canada: Missing Data", subtitle = "Showing Variable Types")
+  visdat::vis_miss(Wages)
+
+```
+
+### Observations:
+
+-   Multiple entries of the wages column contained missing values (NA).
+
+-   The education and language columns contained some missing values as well, albeit fewer than in the wages column.
+
+## How do we handle this missing data?
+
+Because we did not have a data dictionary, we could not be certain whether the NAs represented a meaningful category (for e.g., non-earners in the case of wages, retirement or undisclosed languages). Drawing on a past data set experience, we assumed that empty cells could sometimes encode hidden meanings (e.g., “No”s on all ethnic markers in a previous data set implied “Caucasian”).
+
+#### However, after careful review, we chose to proceed as follows: 
+
+1.  Convert sex and language into factors (from characters).
+
+2.  Rearrange columns to place sex and language before age, education, and wages.
+
+3.  Remove NAs in education, since values like 0 appeared to be intentionally recorded, whereas NA did not seem meaningful. This step removed approximately 121 entries.
+
+4.  Remove NAs in languages, based on the reasoning that special languages (such as sign language) would likely have been coded under “other”.
+
+```{r}
+Wages_mod1 <- Wages %>%
+  mutate(
+    sex = as.factor(sex),
+    language = as.factor(language)
+  ) %>%
+ 
+  dplyr::relocate(sex, language, age, education, wages, .after= rownames)
+Wages_mod1
+```
+
+```{r}
+Wages_mod2 <- Wages_mod1 %>% 
+  tidyr::drop_na(education, language) 
+  Wages_mod2
+
+```
+
+------------------------------------------------------------------------
+
+## Summarizing the data to get a clearer picture
+
+To get a better idea of the data set, we decided to summarize between different variables. 
+
+First, we decided to see the overall picture without language.
+
+We summarized wages, education, and sample counts by sex while dropping missing values.
+
+The results showed a clear **gender wage gap:**
+
+```{r}
+Wages_mod2 %>%
+  group_by(sex) %>%
+  summarize(wages = mean(wages, na.rm=T),
+            education = mean(education), 
+            count = n())
+```
+
+Despite comparable education levels, **females consistently earned less** per hour than males, a difference of nearly \$3.40/hour on average.
+
+This finding was striking given the **similar education levels** between the two groups.
+
+Next we grouped the data by language to see whether wages varied by linguistic background. The results were:
+
+```{r}
+Wages_mod2 %>%
+  group_by(language) %>%
+  summarize(wages = mean(wages, na.rm=T),
+            education = mean(education), 
+            count = n())
+```
+
+Interestingly, while individuals reporting **“other”** languages had **lower average education** levels, their **mean wages** were **slightly higher** than both English and French speakers.
+
+The sample sizes, however, differed greatly (with English dominating), so these results should be interpreted with caution.
+
+## Filtering the Data
+
+We then constructed a box plot of wages by sex across languages, hoping to get a clearer comparison within each language group, and to spot the outliers.
+
+```{r}
+Wages_mod2 %>% 
+  gf_boxplot(language~wages, orientation = "y", color =~ sex) %>% 
+  gf_labs(title="Distribution of Wages by Sex across Languages")
+
+```
+
+Across all three language groups, the pattern was consistent:
+
+-   **Females** Clustered Around **\$13/Hour**
+
+-   **Males** Clustered Around **\$16–17/Hour**
+
+```{r}
+Wages_mod2 %>%
+  filter(sex=="Female") %>% 
+  dplyr::summarise(
+    mean_wages = mean(wages, na.rm=T),
+    sd_wages = sd(wages, na.rm=T),
+    min_wages = min(wages, na.rm=T),
+    max_wages = max(wages, na.rm=T)
+  )
+```
+
+```{r}
+Wages_mod2 %>%
+  filter(sex=="Male") %>% 
+  dplyr::summarise(
+    mean_wages = mean(wages, na.rm=T),
+    sd_wages = sd(wages, na.rm=T),
+    min_wages = min(wages, na.rm=T),
+    max_wages = max(wages, na.rm=T)
+  )
+```
+
+The gender wage gap is quite persistent.
+
+Despite a similar education spread, the average male wages were still about **\$3.40 higher** than their counterparts.
+
+From the box plot, the most pronounced gap appeared in the **“other”** language group.
+
+One hypothesis could be that migrant women may be **over represented** in **lower-paying jobs**, while male counterparts earn more.
+
+To explore this further, We filtered only the **“other”** language speakers:
+
+```{r}
+Wages_mod2 %>%
+  filter(language=="Other") %>% 
+  dplyr::summarise(
+    mean_wages = mean(wages, na.rm=T),
+    sd_wages = sd(wages,na.rm=T),
+    min_wages = min(wages, na.rm=T),
+    max_wages = max(wages, na.rm=T)
+  )
+```
+
+This wide range suggests that while some in the “other” category earn very low wages **(possibly reflecting entry-level or low-skill jobs)**, others earn significantly higher wages, indicating **greater variability in economic outcomes.**
+
+Circling back to address gender wage gap, we examined education levels for both genders to see whether there were any deviations causing this.
+
+```{r}
+Wages_mod2 %>%
+  filter(sex=="Male") %>% 
+  dplyr::summarise(
+    mean_education = mean(education),
+    sd_education = sd(education),
+    min_education = min(education),
+    max_education = max(education)
+  )
+```
+
+```{r}
+Wages_mod2 %>%
+  filter(sex=="Female") %>% 
+  dplyr::summarise(
+    mean_education = mean(education),
+    sd_education = sd(education),
+    min_education = min(education),
+    max_education = max(education)
+  )
+```
+
+Education levels between men and women are essentially the same.
+
+This confirms that the gender wage gap **cannot be attributed** to differences in average **educational** levels.
+
+## Exploring Age, Education and Wages
+
+We plotted a age\~wages graph for respondents aged ≤20 (youngest age=16) to get an idea of the distribution of wages.
+
+```{r}
+Wages_mod2 %>% 
+  filter(age<=20) %>% 
+  gf_point(age~wages, color = ~ sex) %>% 
+gf_labs(title="Distribution of Wages of Young Adults by Sex across Ages")
+```
+
+Most Earned **Below Minimum Wage Levels (\~\$10–15)**
+
+At Age 20, **Females** appeared to earn **more than Males**
+
+At Age 18, A **Single Male Outlier** Reported Earning \~**\$45**, an extreme deviation from the group.
+
+**Inference:** Teen workers earn much less, suggesting entry-level or part-time jobs. The gender gap is less pronounced among teens, and outliers suggest exceptional cases (e.g,, maybe they work in family business or have specialized work).
+
+To see if our assumptions made about retirement were true, we filtered the individuals aged 60 and above. Results:
+
+```{r}
+Wages_mod2 %>%
+  filter(age>=60) %>% 
+  dplyr::count(is.na(wages)) %>% 
+  tt()
+```
+
+```{r}
+Wages_mod2 %>%
+  filter(age>=60) %>% 
+  dplyr::summarise(
+    mean_wages = mean(wages, na.rm=T),
+    sd_wages = sd(wages, na.rm=T),
+    min_wages = min(wages, na.rm=T),
+    max_wages = max(wages, na.rm=T)
+  )
+```
+
+**Inference:** We can thus validate our initial assumptions of retirement around 60, since many people in this data set continue to not work after the age of 60.
+
+However, for those that do continue working, the highest maximum wage suggests that a subset of older workers continue in high-paying jobs, possibly due to **seniority** or **professional roles**.
+
+------------------------------------------------------------------------
+
+### Plotting wage against age (colored by sex) revealed distinct patterns:
+
+```{r}
+Wages_mod2 %>% 
+  gf_point(wages~age, color = ~ sex) %>% 
+  gf_labs(title="Overall Distribution of Wages by Sex across Ages")
+```
+
+**Females:** Wages Peak Around Ages 30–40, then decline gradually afterward
+
+**Males:** Wages Rise Around Their 30s, continue increasing into the 50s, and remain higher into the 60s
+
+**Inference:** Contrary to the assumption about women leaving the workforce around their 30s (due to marriage/family building), the data suggests that **women actually earn their highest in this period**.
+
+The long term divide (men increasing and women decreasing) most likely points to **gender-biased** differences in **career advancement opportunities** rather than workforce exits.
+
+------------------------------------------------------------------------
+
+We summarized again to understand the wage gap between men and women aged over 50. Results:
+
+```{r}
+Wages_mod2 %>%
+  filter(age >= 50, sex=="Male") %>% 
+  dplyr::summarise(
+    mean_wages = mean(wages, na.rm=T),
+    sd_wages = sd(wages, na.rm=T),
+    min_wages = min(wages, na.rm=T),
+    max_wages = max(wages, na.rm=T)
+  )
+```
+
+```{r}
+Wages_mod2 %>%
+  filter(age >= 50, sex=="Female") %>% 
+  dplyr::summarise(
+    mean_wages = mean(wages, na.rm=T),
+    sd_wages = sd(wages, na.rm=T),
+    min_wages = min(wages, na.rm=T),
+    max_wages = max(wages, na.rm=T)
+  )
+```
+
+**Inference:** The wage gap widens significantly at older ages, while male wages continue to rise, female wages plateau or decline. This could indicate **systemic barriers** to advancement for older women, such as **lack of promotion** into higher-paying senior roles, while men continue to benefit from career seniority.
+
+Next, we wanted to find out how many men vs. women are still in the workforce after 50, and whether the higher average male wages are partly explained by sample size differences.
+
+```{r}
+Wages_mod2 %>%
+  filter(age>=50, sex=="Male") %>% 
+  dplyr::count(wages>=0) %>% 
+  tt()
+```
+
+```{r}
+Wages_mod2 %>%
+  filter(age>=50, sex=="Female") %>% 
+  dplyr::count(wages>=0) %>% 
+  tt()
+```
+
+We can infer that the higher wages for older men are not simply a result of a larger sample size.
+
+------------------------------------------------------------------------
+
+#### Visualizing the overall distribution of wages according to language, age and sex:
+
+```{r}
+Wages_mod2 %>% 
+  gf_point(wages ~ age,
+    colour = ~sex,
+    shape = ~language,
+    size = 2, data = .
+  ) %>%
+  gf_labs(
+    title = "Wages according to Language, age and sex",
+    x = "Age",
+    y = "Wages"
+  ) %>%
+ 
+  gf_refine(
+    scale_color_brewer(
+      name = "Languages",
+      palette = "Set1"
+    ),
+    scale_shape_manual(
+      name = "Sex",
+      values = c(15:18)
+    )
+  ) 
+```
+
+```{r}
+Wages_mod2 %>% 
+  gf_point(wages ~ age,
+    colour = ~sex,
+    shape = ~language,
+    size = 2, data = .
+  ) %>%
+  gf_labs(
+    title = "Wages according to Language, age and sex",
+    x = "Age",
+    y = "Wages"
+  ) %>%
+ 
+  gf_refine(
+    scale_color_brewer(
+      name = "Language",
+      palette = "Set1"
+    ),
+    scale_shape_manual(
+      name = "Sex",
+      values = c(15:18)
+    )
+  ) %>% 
+  gf_facet_wrap(~language)
+```
+
+### Crosstable Overview
+
+```{r}
+crosstable(wages + education  ~ sex + language,
+  data = Wages_mod2
+) %>%
+  crosstable::as_flextable()
+```
+
+------------------------------------------------------------------------
+
+## Conclusion
+
+From our exploratory analysis, it is clear that the gender wage gap persists regardless of language or educational attainment, suggesting that systemic factors outweigh individual qualifications.
+
+While women’s earnings peak in their 30s-40s, they plateau or decline afterward, whereas men’s wages continue to rise steadily into their 50s and 60s, benefiting from seniority and career progression. This long-term divergence points to structural barriers in advancement opportunities for women rather than simple workforce exits.
+
+The pronounced gap within the “Other” language group further suggests that migrant women may be concentrated in lower-paying roles, while men access higher wages. Although the data set does not capture working hours, which could explain some of the disparity through part-time or reduced work linked to family responsibilities, the overall trend shows women consistently earning at low to mid-level wages across their lives.
+
+In contrast, men not only remain in the workforce longer but also continue to progress into higher-paying senior roles, reinforcing the persistent wage divide.
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
+
+```{r}
+```
